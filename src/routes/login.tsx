@@ -75,8 +75,8 @@ function LoginPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+              <Label htmlFor="email">{mode === "login" ? "Email or username" : "Email"}</Label>
+              <Input id="email" type={mode === "login" ? "text" : "email"} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={mode === "login" ? "you@example.com or username" : "you@example.com"} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
