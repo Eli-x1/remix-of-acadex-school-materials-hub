@@ -12,9 +12,8 @@ import { useState } from "react";
 import { Plus, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { getSession } from "@/lib/store";
-import { useServerFn } from "@tanstack/react-start";
-import { createSchoolAdminUser } from "@/lib/admin-users.functions";
 import { hydrateFromCloud } from "@/lib/store";
+import { createClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/app/schools")({
   beforeLoad: () => {
