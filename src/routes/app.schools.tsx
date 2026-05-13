@@ -86,15 +86,24 @@ function SchoolsPage() {
     }
   }
 
-  function remove(id: string) {
-    const next = loadDB();
-    next.schools = next.schools.filter((s) => s.id !== id);
-    next.users = next.users.filter((u) => u.schoolId !== id);
-    next.classes = next.classes.filter((c) => c.schoolId !== id);
-    next.students = next.students.filter((s) => s.schoolId !== id);
-    next.materials = next.materials.filter((m) => m.schoolId !== id);
-    next.tracking = next.tracking.filter((t) => t.schoolId !== id);
-    saveDB(next);
+  async function remove(id: string, schoolName: string) {
+    if (!window.confirm(`Delete school "${schoolName}"? This will remove all its classes, students, materials, and tracking. This cannot be undone.`)) return;
+    try {
+      // Detach school admins/staff so their accounts survive
+      await supabase.from("profiles").update({ school_id: null, staff_role_id: null }).eq("school_id", id);
+      await supabase.from("tracking").delete().eq("school_id", id);
+      await supabase.from("students").delete().eq("school_id", id);
+      await supabase.from("materials").delete().eq("school_id", id);
+      await supabase.from("school_classes").delete().eq("school_id", id);
+      await supabase.from("staff_roles").delete().eq("school_id", id);
+      await supabase.from("term_archives").delete().eq("school_id", id);
+      const { error } = await supabase.from("schools").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      await hydrateFromCloud();
+      toast.success("School deleted");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete");
+    }
   }
 
   return (
