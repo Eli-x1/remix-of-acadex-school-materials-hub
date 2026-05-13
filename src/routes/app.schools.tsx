@@ -54,10 +54,11 @@ function SchoolsPage() {
       const url = import.meta.env.VITE_SUPABASE_URL as string;
       const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
       const tmp = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
+      const finalUsername = (adminUsername.trim() || adminEmail.split("@")[0]).toLowerCase();
       const { data: signed, error: signErr } = await tmp.auth.signUp({
         email: adminEmail,
         password: adminPass,
-        options: { data: { name: adminName || "School Admin", username: adminUsername.trim() || null } },
+        options: { data: { name: adminName || "School Admin", username: finalUsername } },
       });
       if (signErr || !signed.user) throw new Error(signErr?.message ?? "Failed to create admin user");
       const newId = signed.user.id;
@@ -67,7 +68,7 @@ function SchoolsPage() {
       const { error: pErr } = await supabase.from("profiles").update({
         school_id: sid,
         name: adminName || "School Admin",
-        username: adminUsername.trim() || null,
+        username: finalUsername,
       }).eq("id", newId);
       if (pErr) throw new Error(pErr.message);
 
@@ -85,15 +86,24 @@ function SchoolsPage() {
     }
   }
 
-  function remove(id: string) {
-    const next = loadDB();
-    next.schools = next.schools.filter((s) => s.id !== id);
-    next.users = next.users.filter((u) => u.schoolId !== id);
-    next.classes = next.classes.filter((c) => c.schoolId !== id);
-    next.students = next.students.filter((s) => s.schoolId !== id);
-    next.materials = next.materials.filter((m) => m.schoolId !== id);
-    next.tracking = next.tracking.filter((t) => t.schoolId !== id);
-    saveDB(next);
+  async function remove(id: string, schoolName: string) {
+    if (!window.confirm(`Delete school "${schoolName}"? This will remove all its classes, students, materials, and tracking. This cannot be undone.`)) return;
+    try {
+      // Detach school admins/staff so their accounts survive
+      await supabase.from("profiles").update({ school_id: null, staff_role_id: null }).eq("school_id", id);
+      await supabase.from("tracking").delete().eq("school_id", id);
+      await supabase.from("students").delete().eq("school_id", id);
+      await supabase.from("materials").delete().eq("school_id", id);
+      await supabase.from("school_classes").delete().eq("school_id", id);
+      await supabase.from("staff_roles").delete().eq("school_id", id);
+      await supabase.from("term_archives").delete().eq("school_id", id);
+      const { error } = await supabase.from("schools").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      await hydrateFromCloud();
+      toast.success("School deleted");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete");
+    }
   }
 
   return (
@@ -133,7 +143,7 @@ function SchoolsPage() {
                   <TableCell>{s.location || "—"}</TableCell>
                   <TableCell>{db.students.filter((x) => x.schoolId === s.id).length}</TableCell>
                   <TableCell>{db.users.filter((x) => x.schoolId === s.id).length}</TableCell>
-                  <TableCell><Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                  <TableCell><Button size="icon" variant="ghost" onClick={() => remove(s.id, s.name)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
