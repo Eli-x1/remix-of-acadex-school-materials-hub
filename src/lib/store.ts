@@ -308,16 +308,11 @@ export function setSession(u: User | null) {
 // Auth
 export async function loginWithPassword(identifier: string, password: string): Promise<{ ok: boolean; error?: string; user?: User }> {
   let email = identifier.trim();
-  // If the identifier is not an email, treat it as a username and resolve via server fn.
   if (!email.includes("@")) {
-    try {
-      const { resolveUsernameToEmail } = await import("@/lib/admin-users.functions");
-      const res = await resolveUsernameToEmail({ data: { username: email } });
-      if (!res.email) return { ok: false, error: "No account found for that username" };
-      email = res.email;
-    } catch (e: any) {
-      return { ok: false, error: e?.message ?? "Failed to resolve username" };
-    }
+    const { data: resolved, error: rpcErr } = await supabase.rpc("get_email_by_username", { _username: email });
+    if (rpcErr) return { ok: false, error: rpcErr.message };
+    if (!resolved) return { ok: false, error: "No account found for that username" };
+    email = resolved as string;
   }
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.user) return { ok: false, error: error?.message ?? "Login failed" };

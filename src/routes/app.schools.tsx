@@ -12,9 +12,8 @@ import { useState } from "react";
 import { Plus, Trash2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { getSession } from "@/lib/store";
-import { useServerFn } from "@tanstack/react-start";
-import { createSchoolAdminUser } from "@/lib/admin-users.functions";
 import { hydrateFromCloud } from "@/lib/store";
+import { createClient } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/app/schools")({
   beforeLoad: () => {
@@ -30,7 +29,6 @@ export const Route = createFileRoute("/app/schools")({
 function SchoolsPage() {
   const db = useDB();
   const _ = useSession();
-  const createAdmin = useServerFn(createSchoolAdminUser);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -51,15 +49,31 @@ function SchoolsPage() {
       });
       if (schoolErr) throw new Error(schoolErr.message);
 
-      await createAdmin({
-        data: {
-          schoolId: sid,
-          email: adminEmail,
-          password: adminPass,
-          name: adminName || "School Admin",
-          username: adminUsername.trim() || undefined,
-        },
+      // Create the auth user via a fresh client (no session persistence)
+      // so the current super_admin session is not affected.
+      const url = import.meta.env.VITE_SUPABASE_URL as string;
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+      const tmp = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
+      const { data: signed, error: signErr } = await tmp.auth.signUp({
+        email: adminEmail,
+        password: adminPass,
+        options: { data: { name: adminName || "School Admin", username: adminUsername.trim() || null } },
       });
+      if (signErr || !signed.user) throw new Error(signErr?.message ?? "Failed to create admin user");
+      const newId = signed.user.id;
+
+      // The handle_new_user trigger created a profile + 'staff' role.
+      // As super_admin, attach school + switch role to school_admin.
+      const { error: pErr } = await supabase.from("profiles").update({
+        school_id: sid,
+        name: adminName || "School Admin",
+        username: adminUsername.trim() || null,
+      }).eq("id", newId);
+      if (pErr) throw new Error(pErr.message);
+
+      await supabase.from("user_roles").delete().eq("user_id", newId);
+      const { error: rErr } = await supabase.from("user_roles").insert({ user_id: newId, role: "school_admin" });
+      if (rErr) throw new Error(rErr.message);
 
       await hydrateFromCloud();
       setOpen(false); setName(""); setLocation(""); setAdminName(""); setAdminEmail(""); setAdminUsername(""); setAdminPass("");
