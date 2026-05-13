@@ -29,7 +29,6 @@ export const Route = createFileRoute("/app/schools")({
 function SchoolsPage() {
   const db = useDB();
   const _ = useSession();
-  const createAdmin = useServerFn(createSchoolAdminUser);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
