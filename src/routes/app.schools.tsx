@@ -143,7 +143,7 @@ function SchoolsPage() {
                   <TableCell>{s.location || "—"}</TableCell>
                   <TableCell>{db.students.filter((x) => x.schoolId === s.id).length}</TableCell>
                   <TableCell>{db.users.filter((x) => x.schoolId === s.id).length}</TableCell>
-                  <TableCell><Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                  <TableCell><Button size="icon" variant="ghost" onClick={() => remove(s.id, s.name)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
                 </TableRow>
               ))}
             </TableBody>
