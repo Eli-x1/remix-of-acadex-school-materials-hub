@@ -54,10 +54,11 @@ function SchoolsPage() {
       const url = import.meta.env.VITE_SUPABASE_URL as string;
       const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
       const tmp = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
+      const finalUsername = (adminUsername.trim() || adminEmail.split("@")[0]).toLowerCase();
       const { data: signed, error: signErr } = await tmp.auth.signUp({
         email: adminEmail,
         password: adminPass,
-        options: { data: { name: adminName || "School Admin", username: adminUsername.trim() || null } },
+        options: { data: { name: adminName || "School Admin", username: finalUsername } },
       });
       if (signErr || !signed.user) throw new Error(signErr?.message ?? "Failed to create admin user");
       const newId = signed.user.id;
@@ -67,7 +68,7 @@ function SchoolsPage() {
       const { error: pErr } = await supabase.from("profiles").update({
         school_id: sid,
         name: adminName || "School Admin",
-        username: adminUsername.trim() || null,
+        username: finalUsername,
       }).eq("id", newId);
       if (pErr) throw new Error(pErr.message);
 
