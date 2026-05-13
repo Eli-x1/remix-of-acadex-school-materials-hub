@@ -102,7 +102,7 @@ function SchoolsPage() {
               <div><Label>Admin username (optional)</Label><Input value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} placeholder="for sign-in" /></div>
               <div><Label>Temporary password</Label><Input value={adminPass} onChange={(e) => setAdminPass(e.target.value)} placeholder="school123" /></div>
             </div>
-            <DialogFooter><Button onClick={add} variant="gradient">Create</Button></DialogFooter>
+            <DialogFooter><Button onClick={add} disabled={busy} variant="gradient">{busy ? "Creating..." : "Create"}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
