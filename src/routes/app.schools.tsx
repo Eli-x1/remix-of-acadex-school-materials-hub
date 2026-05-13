@@ -29,6 +29,7 @@ export const Route = createFileRoute("/app/schools")({
 function SchoolsPage() {
   const db = useDB();
   const _ = useSession();
+  const createAdmin = useServerFn(createSchoolAdminUser);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -36,20 +37,37 @@ function SchoolsPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPass, setAdminPass] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  function add() {
-    if (!name || !adminEmail) return toast.error("Fill required fields");
-    const next = loadDB();
-    const emailLower = adminEmail.toLowerCase();
-    const usernameLower = adminUsername.trim().toLowerCase();
-    if (next.users.some((u) => u.email.toLowerCase() === emailLower)) return toast.error("Admin email already exists");
-    if (usernameLower && next.users.some((u) => (u.username ?? "").toLowerCase() === usernameLower)) return toast.error("Username already taken");
-    const sid = "sch_" + uid();
-    next.schools.push({ id: sid, name, location, createdAt: new Date().toISOString() });
-    next.users.push({ id: "u_" + uid(), name: adminName || "School Admin", email: adminEmail, username: adminUsername.trim() || undefined, password: adminPass || "school123", role: "school_admin", schoolId: sid });
-    saveDB(next);
-    setOpen(false); setName(""); setLocation(""); setAdminName(""); setAdminEmail(""); setAdminUsername(""); setAdminPass("");
-    toast.success("School created");
+  async function add() {
+    if (!name || !adminEmail || !adminPass) return toast.error("Fill required fields (name, admin email, password)");
+    if (adminPass.length < 6) return toast.error("Password must be at least 6 characters");
+    setBusy(true);
+    try {
+      const sid = uid();
+      const { error: schoolErr } = await supabase.from("schools").insert({
+        id: sid, name, location: location || "",
+      });
+      if (schoolErr) throw new Error(schoolErr.message);
+
+      await createAdmin({
+        data: {
+          schoolId: sid,
+          email: adminEmail,
+          password: adminPass,
+          name: adminName || "School Admin",
+          username: adminUsername.trim() || undefined,
+        },
+      });
+
+      await hydrateFromCloud();
+      setOpen(false); setName(""); setLocation(""); setAdminName(""); setAdminEmail(""); setAdminUsername(""); setAdminPass("");
+      toast.success("School and admin created");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to create school");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function remove(id: string) {
