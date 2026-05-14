@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useDB, useSession } from "@/hooks/use-acadex";
-import { loadDB, saveDB, uid } from "@/lib/store";
+import { normalizeUsername, uid } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -54,7 +54,7 @@ function SchoolsPage() {
       const url = import.meta.env.VITE_SUPABASE_URL as string;
       const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
       const tmp = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
-      const finalUsername = (adminUsername.trim() || adminEmail.split("@")[0]).toLowerCase();
+      const finalUsername = normalizeUsername(adminUsername || adminEmail.split("@")[0]);
       const { data: signed, error: signErr } = await tmp.auth.signUp({
         email: adminEmail,
         password: adminPass,
@@ -70,13 +70,15 @@ function SchoolsPage() {
       }
       const newId = signed.user.id;
 
-      // The handle_new_user trigger created a profile + 'staff' role.
-      // As super_admin, attach school + switch role to school_admin.
-      const { error: pErr } = await supabase.from("profiles").update({
+      // Some environments are missing the auth->profile trigger, so upsert the
+      // profile explicitly instead of assuming it exists.
+      const { error: pErr } = await supabase.from("profiles").upsert({
+        id: newId,
+        email: adminEmail,
         school_id: sid,
         name: adminName || "School Admin",
         username: finalUsername,
-      }).eq("id", newId);
+      });
       if (pErr) throw new Error(pErr.message);
 
       await supabase.from("user_roles").delete().eq("user_id", newId);
