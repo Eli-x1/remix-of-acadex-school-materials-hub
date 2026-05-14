@@ -110,6 +110,10 @@ const CACHE = "acadex_cloud_cache_v1";
 
 export const uid = () => crypto.randomUUID();
 
+export function normalizeUsername(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
 function emptyDB(): DB {
   return { users: [], schools: [], staffRoles: [], classes: [], students: [], materials: [], tracking: [], audit: [], archives: [] };
 }
@@ -309,9 +313,10 @@ export function setSession(u: User | null) {
 export async function loginWithPassword(identifier: string, password: string): Promise<{ ok: boolean; error?: string; user?: User }> {
   let email = identifier.trim();
   if (!email.includes("@")) {
-    const { data: resolved, error: rpcErr } = await supabase.rpc("get_email_by_username", { _username: email });
+    const normalizedIdentifier = normalizeUsername(email);
+    const { data: resolved, error: rpcErr } = await supabase.rpc("get_email_by_username", { _username: normalizedIdentifier });
     if (rpcErr) return { ok: false, error: rpcErr.message };
-    if (!resolved) return { ok: false, error: "No account found for that username" };
+    if (!resolved) return { ok: false, error: "No account found for that username. Try the email address used for that school admin." };
     email = resolved as string;
   }
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
