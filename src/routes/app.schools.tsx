@@ -61,6 +61,13 @@ function SchoolsPage() {
         options: { data: { name: adminName || "School Admin", username: finalUsername } },
       });
       if (signErr || !signed.user) throw new Error(signErr?.message ?? "Failed to create admin user");
+      // Supabase returns the existing user with empty identities[] when the email is already registered.
+      // In that case the password we just supplied is IGNORED, so the admin can never sign in.
+      if (!signed.user.identities || signed.user.identities.length === 0) {
+        // Roll back the school we just created so the super_admin isn't left with an orphaned record.
+        await supabase.from("schools").delete().eq("id", sid);
+        throw new Error("An account with this email already exists. Use a different email for the school admin.");
+      }
       const newId = signed.user.id;
 
       // The handle_new_user trigger created a profile + 'staff' role.
