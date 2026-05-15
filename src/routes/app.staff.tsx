@@ -1,6 +1,8 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { useDB, useSession } from "@/hooks/use-acadex";
-import { loadDB, saveDB, uid, ROLE_LABEL, userRoleLabel, getSession, hasPermission, type Role } from "@/lib/store";
+import { loadDB, saveDB, normalizeUsername, hydrateFromCloud, ROLE_LABEL, userRoleLabel, getSession, hasPermission, type Role } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
+import { createClient } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ function StaffPage() {
   const [password, setPassword] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [roleSelection, setRoleSelection] = useState<string>("");
+  const [busy, setBusy] = useState(false);
 
   function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -78,61 +81,86 @@ function StaffPage() {
     setOpen(true);
   }
 
-  function saveStaff() {
+  async function saveStaff() {
     if (!name || !email) return toast.error("Fill name and email");
     if (!roleSelection) return toast.error("Select a role");
-    const next = loadDB();
-    const emailLower = email.toLowerCase();
-    const usernameLower = username.trim().toLowerCase();
 
     let role: Role;
     let staffRoleId: string | null = null;
     if (roleSelection === SCHOOL_ADMIN_OPTION) { role = "school_admin"; }
     else { role = "staff"; staffRoleId = roleSelection; }
 
-    if (editingId) {
-      const u = next.users.find((x) => x.id === editingId);
-      if (!u) return toast.error("User not found");
-      if (next.users.some((x) => x.id !== editingId && x.email.toLowerCase() === emailLower)) return toast.error("Email already exists");
-      if (usernameLower && next.users.some((x) => x.id !== editingId && (x.username ?? "").toLowerCase() === usernameLower)) return toast.error("Username already taken");
-      u.name = name;
-      u.email = email;
-      u.username = username.trim() || undefined;
-      if (password) u.password = password;
-      u.role = role;
-      u.staffRoleId = staffRoleId;
-      u.photo = photo;
-      saveDB(next);
+    setBusy(true);
+    try {
+      const finalUsername = username.trim() ? normalizeUsername(username) : normalizeUsername(email.split("@")[0]);
+
+      if (editingId) {
+        // Update profile + role only
+        const { error: pErr } = await supabase.from("profiles").update({
+          name, email, username: finalUsername, photo, staff_role_id: staffRoleId,
+        }).eq("id", editingId);
+        if (pErr) throw new Error(pErr.message);
+        await supabase.from("user_roles").delete().eq("user_id", editingId);
+        const { error: rErr } = await supabase.from("user_roles").insert({ user_id: editingId, role });
+        if (rErr) throw new Error(rErr.message);
+        await hydrateFromCloud();
+        toast.success("Staff updated");
+        setOpen(false); resetForm();
+        return;
+      }
+
+      if (!password || password.length < 6) return toast.error("Password must be at least 6 characters");
+
+      // Create auth user via temp client so super_admin/school_admin session is preserved
+      const url = import.meta.env.VITE_SUPABASE_URL as string;
+      const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+      const tmp = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, storage: undefined } });
+      const { data: signed, error: signErr } = await tmp.auth.signUp({
+        email,
+        password,
+        options: { data: { name, username: finalUsername } },
+      });
+      if (signErr || !signed.user) throw new Error(signErr?.message ?? "Failed to create user");
+      if (!signed.user.identities || signed.user.identities.length === 0) {
+        throw new Error("An account with this email already exists.");
+      }
+      const newId = signed.user.id;
+
+      // Upsert profile (trigger should handle, but make sure)
+      const { error: pErr } = await supabase.from("profiles").upsert({
+        id: newId, email, username: finalUsername, name,
+        school_id: user.schoolId, staff_role_id: staffRoleId, photo,
+      });
+      if (pErr) throw new Error(pErr.message);
+
+      await supabase.from("user_roles").delete().eq("user_id", newId);
+      const { error: rErr } = await supabase.from("user_roles").insert({ user_id: newId, role });
+      if (rErr) throw new Error(rErr.message);
+
+      await hydrateFromCloud();
+      toast.success("Staff added");
       setOpen(false); resetForm();
-      toast.success("Staff updated");
-      return;
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save staff");
+    } finally {
+      setBusy(false);
     }
-
-    if (!password) return toast.error("Set a password");
-    if (next.users.some((u) => u.email.toLowerCase() === emailLower)) return toast.error("Email already exists");
-    if (usernameLower && next.users.some((u) => (u.username ?? "").toLowerCase() === usernameLower)) return toast.error("Username already taken");
-
-    next.users.push({
-      id: "u_" + uid(),
-      name,
-      email,
-      username: username.trim() || undefined,
-      password,
-      role,
-      schoolId: user.schoolId,
-      staffRoleId,
-      photo,
-    });
-    saveDB(next);
-    setOpen(false); resetForm();
-    toast.success("Staff added");
   }
 
-  function removeStaff(id: string) {
-    const next = loadDB();
-    next.users = next.users.filter((u) => u.id !== id);
-    next.materials.forEach((m) => { m.assignedStaffIds = m.assignedStaffIds.filter((sid) => sid !== id); });
-    saveDB(next);
+  async function removeStaff(id: string) {
+    if (!window.confirm("Remove this staff member?")) return;
+    try {
+      // Detach from school + remove role; auth user remains (only super_admin can fully delete)
+      await supabase.from("profiles").update({ school_id: null, staff_role_id: null }).eq("id", id);
+      await supabase.from("user_roles").delete().eq("user_id", id);
+      const next = loadDB();
+      next.materials.forEach((m) => { m.assignedStaffIds = m.assignedStaffIds.filter((sid) => sid !== id); });
+      saveDB(next);
+      await hydrateFromCloud();
+      toast.success("Staff removed");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to remove");
+    }
   }
 
   return (
@@ -231,7 +259,7 @@ function StaffPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={saveStaff} variant="gradient" disabled={availableRoles.length === 0 && user.role !== "super_admin"}>{editingId ? "Save changes" : "Add"}</Button>
+            <Button onClick={saveStaff} variant="gradient" disabled={busy || (availableRoles.length === 0 && user.role !== "super_admin")}>{busy ? "Saving..." : (editingId ? "Save changes" : "Add")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

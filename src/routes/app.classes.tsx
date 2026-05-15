@@ -49,7 +49,7 @@ function ClassesPage() {
     );
     if (dupe) return toast.error("This class already exists");
     next.classes.push({
-      id: "cl_" + uid(),
+      id: uid(),
       schoolId,
       level,
       trade: isLevelL ? trade.trim() : null,

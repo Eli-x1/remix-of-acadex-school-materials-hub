@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useDB, useSession } from "@/hooks/use-acadex";
-import { loadDB, saveDB, getSession, classDisplayName, currentAcademicYear, currentTerm, TERM_LABEL, logAudit, type TrackingStatus, type Term } from "@/lib/store";
+import { loadDB, saveDB, uid, getSession, classDisplayName, currentAcademicYear, currentTerm, TERM_LABEL, logAudit, type TrackingStatus, type Term } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -69,7 +69,7 @@ function TrackingPage() {
     let t = next.tracking.find((x) => x.studentId === studentId && x.materialId === activeMaterial.id && x.academicYear === year && x.term === term);
     if (!t) {
       const created = {
-        id: "tr_" + Math.random().toString(36).slice(2, 10),
+        id: uid(),
         schoolId: activeMaterial.schoolId,
         studentId,
         materialId: activeMaterial.id,
