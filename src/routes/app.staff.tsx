@@ -259,7 +259,7 @@ function StaffPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={saveStaff} variant="gradient" disabled={availableRoles.length === 0 && user.role !== "super_admin"}>{editingId ? "Save changes" : "Add"}</Button>
+            <Button onClick={saveStaff} variant="gradient" disabled={busy || (availableRoles.length === 0 && user.role !== "super_admin")}>{busy ? "Saving..." : (editingId ? "Save changes" : "Add")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
