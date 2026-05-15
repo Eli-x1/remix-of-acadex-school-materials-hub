@@ -126,7 +126,7 @@ function MaterialsPage() {
           <DialogHeader><DialogTitle>{editingId ? "Edit material" : "Add material"}</DialogTitle></DialogHeader>
           {staffList.length === 0 ? (
             <div className="text-sm text-muted-foreground">
-              No staff members yet. <Link to="/app/settings" className="text-primary underline">Add a staff member</Link> first so you can assign who checks this material.
+              No staff members yet. <Link to="/app/staff" className="text-primary underline">Add a staff member</Link> first so you can assign who checks this material.
             </div>
           ) : (
             <div className="space-y-3">
