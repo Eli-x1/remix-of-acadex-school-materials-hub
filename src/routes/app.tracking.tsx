@@ -69,7 +69,7 @@ function TrackingPage() {
     let t = next.tracking.find((x) => x.studentId === studentId && x.materialId === activeMaterial.id && x.academicYear === year && x.term === term);
     if (!t) {
       const created = {
-        id: "tr_" + Math.random().toString(36).slice(2, 10),
+        id: uid(),
         schoolId: activeMaterial.schoolId,
         studentId,
         materialId: activeMaterial.id,

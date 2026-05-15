@@ -52,7 +52,7 @@ function StaffRolesPage() {
     } else {
       const dup = next.staffRoles.find((r) => r.schoolId === schoolId && r.name.toLowerCase() === trimmed.toLowerCase());
       if (dup) return toast.error("A role with that name already exists");
-      next.staffRoles.push({ id: "sr_" + uid(), schoolId: schoolId!, name: trimmed, createdAt: new Date().toISOString() });
+      next.staffRoles.push({ id: uid(), schoolId: schoolId!, name: trimmed, createdAt: new Date().toISOString() });
       saveDB(next);
       toast.success("Role created");
     }

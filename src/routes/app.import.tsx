@@ -146,7 +146,7 @@ function importClasses(rows: Record<string, string>[], schoolId: string) {
     if (!LEVELS.includes(level)) { errors.push(`Row ${i + 2}: invalid level "${r.level}"`); return; }
     const trade = r.trade || null;
     const abbr = r.abbreviation || null;
-    db.classes.push({ id: "cls_" + uid(), schoolId, level, trade, abbreviation: abbr, createdAt: new Date().toISOString() });
+    db.classes.push({ id: uid(), schoolId, level, trade, abbreviation: abbr, createdAt: new Date().toISOString() });
     ok++;
   });
   saveDB(db); logAudit("classes.bulk_import", `${ok} rows`);
@@ -159,7 +159,7 @@ function importMaterials(rows: Record<string, string>[], schoolId: string) {
   rows.forEach((r, i) => {
     const name = r.name?.trim();
     if (!name) { errors.push(`Row ${i + 2}: missing name`); return; }
-    db.materials.push({ id: "m_" + uid(), schoolId, name, assignedStaffIds: [] });
+    db.materials.push({ id: uid(), schoolId, name, assignedStaffIds: [] });
     ok++;
   });
   saveDB(db); logAudit("materials.bulk_import", `${ok} rows`);
@@ -181,10 +181,10 @@ function importStudents(rows: Record<string, string>[], schoolId: string) {
     const cls = classMatch(classLabel);
     if (!cls) { errors.push(`Row ${i + 2}: class "${classLabel}" not found`); return; }
     if (!phone || phone.length < 7) { errors.push(`Row ${i + 2}: invalid parent phone`); return; }
-    const sid = "st_" + uid();
+    const sid = uid();
     db.students.push({ id: sid, schoolId, name, classId: cls.id, className: classDisplayName(cls), parentPhone: phone, photo: null });
     db.materials.filter((m) => m.schoolId === schoolId).forEach((m) =>
-      db.tracking.push({ id: "tr_" + uid(), schoolId, studentId: sid, materialId: m.id, status: "pending", promisedDate: null, updatedAt: new Date().toISOString(), academicYear: currentAcademicYear(), term: currentTerm() })
+      db.tracking.push({ id: uid(), schoolId, studentId: sid, materialId: m.id, status: "pending", promisedDate: null, updatedAt: new Date().toISOString(), academicYear: currentAcademicYear(), term: currentTerm() })
     );
     ok++;
   });
