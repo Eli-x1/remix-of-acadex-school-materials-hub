@@ -126,29 +126,17 @@ function StaffPage() {
       }
       const newId = signed.user.id;
 
-      // Upsert profile (trigger should handle, but make sure)
-      const { error: pErr } = await supabase.from("profiles").upsert({
-        id: newId, email, username: finalUsername, name,
-        school_id: user.schoolId, staff_role_id: staffRoleId, photo,
+      // One atomic RPC: attach profile to caller's school + set role.
+      // Runs SECURITY DEFINER, so no RLS race with the signup trigger.
+      const { error: aErr } = await supabase.rpc("admin_attach_staff", {
+        _user_id: newId,
+        _name: name,
+        _username: finalUsername,
+        _photo: photo,
+        _staff_role_id: staffRoleId,
+        _role: role,
       });
-      if (pErr) throw new Error(pErr.message);
-
-      // Force-set school_id in case the trigger created the row first with NULL
-      // and the upsert above raced or was treated as a no-op update.
-      let attached = false;
-      for (let i = 0; i < 5 && !attached; i++) {
-        const { data: upd, error: uErr } = await supabase.from("profiles").update({
-          school_id: user.schoolId, staff_role_id: staffRoleId, name, username: finalUsername, photo,
-        }).eq("id", newId).select("id");
-        if (uErr) throw new Error(uErr.message);
-        if (upd && upd.length > 0) attached = true;
-        else await new Promise((r) => setTimeout(r, 300));
-      }
-      if (!attached) throw new Error("Could not attach new staff to your school. Please retry.");
-
-      await supabase.from("user_roles").delete().eq("user_id", newId);
-      const { error: rErr } = await supabase.from("user_roles").insert({ user_id: newId, role });
-      if (rErr) throw new Error(rErr.message);
+      if (aErr) throw new Error(aErr.message);
 
       await hydrateFromCloud();
       toast.success("Staff added");
