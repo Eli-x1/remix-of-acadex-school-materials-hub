@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useState } from "react";
-import { ClipboardCheck, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Clock, User } from "lucide-react";
 import { StatusBadge } from "./app.dashboard";
 import { toast } from "sonner";
 
