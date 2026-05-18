@@ -133,6 +133,19 @@ function StaffPage() {
       });
       if (pErr) throw new Error(pErr.message);
 
+      // Force-set school_id in case the trigger created the row first with NULL
+      // and the upsert above raced or was treated as a no-op update.
+      let attached = false;
+      for (let i = 0; i < 5 && !attached; i++) {
+        const { data: upd, error: uErr } = await supabase.from("profiles").update({
+          school_id: user.schoolId, staff_role_id: staffRoleId, name, username: finalUsername, photo,
+        }).eq("id", newId).select("id");
+        if (uErr) throw new Error(uErr.message);
+        if (upd && upd.length > 0) attached = true;
+        else await new Promise((r) => setTimeout(r, 300));
+      }
+      if (!attached) throw new Error("Could not attach new staff to your school. Please retry.");
+
       await supabase.from("user_roles").delete().eq("user_id", newId);
       const { error: rErr } = await supabase.from("user_roles").insert({ user_id: newId, role });
       if (rErr) throw new Error(rErr.message);

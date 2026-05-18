@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useState } from "react";
-import { ClipboardCheck, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ClipboardCheck, CheckCircle2, XCircle, Clock, User } from "lucide-react";
 import { StatusBadge } from "./app.dashboard";
 import { toast } from "sonner";
 
@@ -136,6 +137,14 @@ function TrackingPage() {
         </p>
       </div>
 
+      <Tabs defaultValue="by-material">
+        <TabsList>
+          <TabsTrigger value="by-material"><ClipboardCheck className="mr-2 h-4 w-4" />By material</TabsTrigger>
+          <TabsTrigger value="by-student"><User className="mr-2 h-4 w-4" />By student</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="by-material" className="space-y-6 mt-4">
+
       <Card className="shadow-[var(--shadow-card)]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" /> Select material & period</CardTitle>
@@ -248,6 +257,186 @@ function TrackingPage() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="by-student" className="mt-4">
+          <ByStudentPanel
+            year={year}
+            term={term}
+            setYear={setYear}
+            setTerm={setTerm}
+            yearOptions={yearOptions}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ByStudentPanel({
+  year, term, setYear, setTerm, yearOptions,
+}: {
+  year: number; term: Term;
+  setYear: (n: number) => void; setTerm: (t: Term) => void;
+  yearOptions: number[];
+}) {
+  const db = useDB();
+  const user = useSession()!;
+  const schoolFilter = (id: string | undefined) =>
+    user.role === "super_admin" ? true : id === user.schoolId;
+
+  const classes = db.classes.filter((c) => schoolFilter(c.schoolId));
+  const [classId, setClassId] = useState<string>("");
+  const [studentId, setStudentId] = useState<string>("");
+
+  const students = db.students.filter((s) => schoolFilter(s.schoolId) && (!classId || s.classId === classId));
+  const student = db.students.find((s) => s.id === studentId);
+
+  // Materials this user can check for the chosen student's school
+  const materials = student
+    ? db.materials
+        .filter((m) => m.schoolId === student.schoolId)
+        .filter((m) => user.role === "super_admin" || user.role === "school_admin" ? true : m.assignedStaffIds.includes(user.id))
+    : [];
+
+  function findEntry(mid: string) {
+    return db.tracking.find((x) => x.studentId === studentId && x.materialId === mid && x.academicYear === year && x.term === term);
+  }
+
+  function setStatus(materialId: string, status: TrackingStatus, promisedDate?: string | null) {
+    if (!student) return;
+    const next = loadDB();
+    let t = next.tracking.find((x) => x.studentId === student.id && x.materialId === materialId && x.academicYear === year && x.term === term);
+    if (!t) {
+      next.tracking.push({
+        id: uid(),
+        schoolId: student.schoolId,
+        studentId: student.id,
+        materialId,
+        status,
+        promisedDate: promisedDate ?? null,
+        updatedAt: new Date().toISOString(),
+        academicYear: year,
+        term,
+      });
+    } else {
+      t.status = status;
+      if (promisedDate !== undefined) t.promisedDate = promisedDate;
+      if (status === "completed") t.promisedDate = null;
+      t.updatedAt = new Date().toISOString();
+    }
+    saveDB(next);
+    const mat = next.materials.find((m) => m.id === materialId)?.name ?? materialId;
+    logAudit("tracking.update", `${student.name} · ${mat}`, status);
+  }
+
+  function recordPromise(materialId: string, dateStr: string) {
+    if (!dateStr) return toast.error("Pick a promised date");
+    setStatus(materialId, "pending", dateStr);
+    toast.success("Promised date saved");
+  }
+
+  const cls = student ? db.classes.find((c) => c.id === student.classId) : undefined;
+
+  return (
+    <div className="space-y-6">
+      <Card className="shadow-[var(--shadow-card)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base"><User className="h-4 w-4" /> Pick a student</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <Select value={classId} onValueChange={(v) => { setClassId(v); setStudentId(""); }}>
+            <SelectTrigger><SelectValue placeholder="Choose class" /></SelectTrigger>
+            <SelectContent>
+              {classes.map((c) => <SelectItem key={c.id} value={c.id}>{classDisplayName(c)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={studentId} onValueChange={setStudentId} disabled={!classId}>
+            <SelectTrigger><SelectValue placeholder={classId ? "Choose student" : "Select class first"} /></SelectTrigger>
+            <SelectContent>
+              {students.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger><SelectValue placeholder="Academic year" /></SelectTrigger>
+            <SelectContent>
+              {yearOptions.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={term} onValueChange={(v) => setTerm(v as Term)}>
+            <SelectTrigger><SelectValue placeholder="Term" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="T1">{TERM_LABEL.T1}</SelectItem>
+              <SelectItem value="T2">{TERM_LABEL.T2}</SelectItem>
+              <SelectItem value="T3">{TERM_LABEL.T3}</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {student ? (
+        <Card className="shadow-[var(--shadow-card)]">
+          <CardHeader>
+            <CardTitle className="text-base flex flex-wrap items-center gap-2">
+              <span>{student.name}</span>
+              {cls && <Badge variant="outline">{classDisplayName(cls)}</Badge>}
+              <Badge variant="outline">{year} · {TERM_LABEL[term]}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Material</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Promised date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {materials.length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground py-8">No materials assigned to you for this student's school.</TableCell></TableRow>
+                )}
+                {materials.map((m) => {
+                  const t = findEntry(m.id);
+                  const status: TrackingStatus = t?.status ?? "pending";
+                  return (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">{m.name}</TableCell>
+                      <TableCell><StatusBadge status={status} /></TableCell>
+                      <TableCell>
+                        <Input
+                          type="date"
+                          className="h-8 w-[160px]"
+                          value={t?.promisedDate ? t.promisedDate.slice(0, 10) : ""}
+                          onChange={(e) => recordPromise(m.id, e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="inline-flex gap-2">
+                          <Button size="sm" variant={status === "completed" ? "gradient" : "outline"} onClick={() => setStatus(m.id, "completed", null)}>
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Brought
+                          </Button>
+                          <Button size="sm" variant={status === "pending" ? "secondary" : "outline"} onClick={() => setStatus(m.id, "pending")}>
+                            Not brought
+                          </Button>
+                          <Button size="sm" variant={status === "overdue" ? "destructive" : "outline"} onClick={() => setStatus(m.id, "overdue")}>
+                            Overdue
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
+          Choose a class and a student to check all their materials in one place.
+        </CardContent></Card>
+      )}
     </div>
   );
 }
