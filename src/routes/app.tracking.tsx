@@ -137,6 +137,14 @@ function TrackingPage() {
         </p>
       </div>
 
+      <Tabs defaultValue="by-material">
+        <TabsList>
+          <TabsTrigger value="by-material"><ClipboardCheck className="mr-2 h-4 w-4" />By material</TabsTrigger>
+          <TabsTrigger value="by-student"><User className="mr-2 h-4 w-4" />By student</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="by-material" className="space-y-6 mt-4">
+
       <Card className="shadow-[var(--shadow-card)]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" /> Select material & period</CardTitle>
