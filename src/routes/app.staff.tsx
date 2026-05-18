@@ -132,8 +132,8 @@ function StaffPage() {
         _user_id: newId,
         _name: name,
         _username: finalUsername,
-        _photo: photo,
-        _staff_role_id: staffRoleId,
+        _photo: photo as string,
+        _staff_role_id: staffRoleId as string,
         _role: role,
       });
       if (aErr) throw new Error(aErr.message);
