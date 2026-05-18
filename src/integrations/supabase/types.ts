@@ -432,6 +432,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_attach_staff: {
+        Args: {
+          _name: string
+          _photo: string
+          _role: Database["public"]["Enums"]["app_role"]
+          _staff_role_id: string
+          _user_id: string
+          _username: string
+        }
+        Returns: undefined
+      }
       current_school_id: { Args: never; Returns: string }
       get_email_by_username: { Args: { _username: string }; Returns: string }
       has_role: {
